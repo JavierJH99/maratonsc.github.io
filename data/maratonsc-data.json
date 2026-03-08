@@ -1,0 +1,77 @@
+{
+  "tournamentName": "Maratón de Fútbol Sala de San Clemente",
+  "location": "Pabellón Municipal de San Clemente",
+  "scoring": {
+    "win": 3,
+    "draw": 1,
+    "loss": 0
+  },
+  "matches": [
+    {
+      "id": "m1",
+      "datetime": "2026-03-08T09:00:00+01:00",
+      "teamHome": "Leones Urbanos",
+      "teamAway": "Tigres del Norte",
+      "scoreHome": 5,
+      "scoreAway": 2,
+      "status": "finished"
+    },
+    {
+      "id": "m2",
+      "datetime": "2026-03-08T10:00:00+01:00",
+      "teamHome": "Estrellas Rojas",
+      "teamAway": "Atléticos Cielo",
+      "scoreHome": 3,
+      "scoreAway": 3,
+      "status": "finished"
+    },
+    {
+      "id": "m3",
+      "datetime": "2026-03-08T11:00:00+01:00",
+      "teamHome": "Rayo Celta",
+      "teamAway": "Leones Urbanos",
+      "scoreHome": 1,
+      "scoreAway": 0,
+      "status": "finished"
+    },
+    {
+      "id": "m4",
+      "datetime": "2026-03-08T12:00:00+01:00",
+      "teamHome": "Tigres del Norte",
+      "teamAway": "Estrellas Rojas",
+      "scoreHome": 2,
+      "scoreAway": 2,
+      "status": "finished"
+    },
+    {
+      "id": "m5",
+      "datetime": "2026-03-08T13:00:00+01:00",
+      "teamHome": "Atléticos Cielo",
+      "teamAway": "Rayo Celta",
+      "scoreHome": 1,
+      "scoreAway": 4,
+      "status": "finished"
+    },
+    {
+      "id": "m6",
+      "datetime": "2026-03-08T14:30:00+01:00",
+      "teamHome": "Leones Urbanos",
+      "teamAway": "Atléticos Cielo",
+      "status": "live"
+    },
+    {
+      "id": "m7",
+      "datetime": "2026-03-08T16:00:00+01:00",
+      "teamHome": "Rayo Celta",
+      "teamAway": "Estrellas Rojas",
+      "status": "scheduled"
+    },
+    {
+      "id": "m8",
+      "datetime": "2026-03-08T17:00:00+01:00",
+      "teamHome": "Tigres del Norte",
+      "teamAway": "Rayo Celta",
+      "status": "scheduled"
+    }
+  ]
+}

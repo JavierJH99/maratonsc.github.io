@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Maratón de Fútbol Sala | Clasificación en Vivo</title>
+  <meta
+    name="description"
+    content="Clasificación en tiempo real y seguimiento de partidos de la Maratón de Fútbol Sala."
+  />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Titillium+Web:wght@400;600;700&family=Bebas+Neue&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+  <header class="hero">
+    <p class="brand">Maratón de San Clemente</p>
+    <h1>Clasificación en tiempo real</h1>
+    <p class="subtitle">
+      Seguimiento de la tabla y de todos los partidos jugados/pendientes en la
+      maratón.
+    </p>
+    <div class="meta">
+      <span id="live-indicator" class="status-live">Actualización en curso</span>
+      <span id="last-update">Sincronizando…</span>
+    </div>
+  </header>
+
+  <main>
+    <section class="panel" aria-labelledby="ranking-title">
+      <div class="section-heading">
+        <h2 id="ranking-title">Tabla de clasificación</h2>
+        <button id="refresh-btn" type="button">Actualizar ahora</button>
+      </div>
+      <p id="status-msg" class="small">Cargando datos…</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Pos</th>
+              <th>Equipo</th>
+              <th>PJ</th>
+              <th>G</th>
+              <th>E</th>
+              <th>P</th>
+              <th>GF</th>
+              <th>GC</th>
+              <th>Dif.</th>
+              <th>Puntos</th>
+            </tr>
+          </thead>
+          <tbody id="ranking-body">
+            <tr>
+              <td colspan="10">No hay datos todavía.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="matches-title">
+      <h2 id="matches-title">Partidos</h2>
+      <div id="live-matches" class="match-group">
+        <h3>En curso</h3>
+        <div id="live-list" class="match-list"></div>
+      </div>
+      <div id="finished-matches" class="match-group">
+        <h3>Finalizados</h3>
+        <div id="finished-list" class="match-list"></div>
+      </div>
+      <div id="pending-matches" class="match-group">
+        <h3>Programados</h3>
+        <div id="pending-list" class="match-list"></div>
+      </div>
+    </section>
+
+    <section class="panel instructions">
+      <h2>Cómo publicarlo en vivo</h2>
+      <ol>
+        <li>Haz una edición del archivo <strong>data/maratonsc-data.json</strong>.</li>
+        <li>Rellena el marcador de cada encuentro terminado en <code>status: finished</code>.</li>
+        <li>Haz commit y push al repositorio: GitHub Pages refrescará la página automáticamente.</li>
+      </ol>
+      <p class="small">
+        Esta versión funciona <strong>sin API</strong>: todo viene del archivo local <code>data/maratonsc-data.json</code>.
+      </p>
+    </section>
+  </main>
+
+  <footer>
+    Hecho para la maratón por la comunidad.
+  </footer>
+
+  <script>
+    const UI = {
+      dataFile: "data/maratonsc-data.json",
+      refreshIntervalMs: 15000,
+      rankingBody: document.getElementById("ranking-body"),
+      statusMsg: document.getElementById("status-msg"),
+      statusIndicator: document.getElementById("live-indicator"),
+      lastUpdate: document.getElementById("last-update"),
+      liveList: document.getElementById("live-list"),
+      finishedList: document.getElementById("finished-list"),
+      pendingList: document.getElementById("pending-list"),
+      refreshBtn: document.getElementById("refresh-btn"),
+    };
+
+    const normalizeTeam = (teamName = "") => teamName.trim();
+
+    const buildEmptyTableRow = (cols, message) => {
+      const row = document.createElement("tr");
+      const cell = document.createElement("td");
+      cell.colSpan = cols;
+      cell.textContent = message;
+      cell.classList.add("muted");
+      row.appendChild(cell);
+      return row;
+    };
+
+    const buildEmptyMatchMessage = (message) => {
+      const item = document.createElement("article");
+      item.className = "match-card scheduled";
+      const text = document.createElement("p");
+      text.className = "muted";
+      text.textContent = message;
+      item.appendChild(text);
+      return item;
+    };
+
+    const parseMatches = (matches = []) =>
+      matches
+        .filter((match) => match?.teamHome && match?.teamAway)
+        .map((match) => ({
+          ...match,
+          teamHome: normalizeTeam(match.teamHome),
+          teamAway: normalizeTeam(match.teamAway),
+          scoreHome: Number.isInteger(match.scoreHome) ? match.scoreHome : null,
+          scoreAway: Number.isInteger(match.scoreAway) ? match.scoreAway : null,
+          datetime: new Date(match.datetime || Date.now()),
+          status: (match.status || "scheduled").toLowerCase(),
+        }));
+
+    const initTeamRows = (matches) => {
+      const rows = new Map();
+      matches.forEach((match) => {
+        [match.teamHome, match.teamAway].forEach((team) => {
+          if (!rows.has(team)) {
+            rows.set(team, {
+              team,
+              played: 0,
+              won: 0,
+              draw: 0,
+              lost: 0,
+              gf: 0,
+              gc: 0,
+              points: 0,
+            });
+          }
+        });
+      });
+      return rows;
+    };
+
+    const computeStandings = (matches, scoreConfig) => {
+      const rows = initTeamRows(matches);
+      const winPoints = scoreConfig?.win ?? 3;
+      const drawPoints = scoreConfig?.draw ?? 1;
+      const losePoints = scoreConfig?.loss ?? 0;
+
+      matches
+        .filter((match) => match.status === "finished")
+        .forEach((match) => {
+          if (match.scoreHome == null || match.scoreAway == null) return;
+
+          const home = rows.get(match.teamHome);
+          const away = rows.get(match.teamAway);
+          const homeGoals = match.scoreHome;
+          const awayGoals = match.scoreAway;
+
+          home.played += 1;
+          away.played += 1;
+          home.gf += homeGoals;
+          home.gc += awayGoals;
+          away.gf += awayGoals;
+          away.gc += homeGoals;
+
+          if (homeGoals > awayGoals) {
+            home.won += 1;
+            away.lost += 1;
+            home.points += winPoints;
+            away.points += losePoints;
+          } else if (homeGoals < awayGoals) {
+            away.won += 1;
+            home.lost += 1;
+            away.points += winPoints;
+            home.points += losePoints;
+          } else {
+            home.draw += 1;
+            away.draw += 1;
+            home.points += drawPoints;
+            away.points += drawPoints;
+          }
+        });
+
+      return [...rows.values()]
+        .map((row) => ({ ...row, diff: row.gf - row.gc }))
+        .sort((a, b) => {
+          if (b.points !== a.points) return b.points - a.points;
+          if (b.diff !== a.diff) return b.diff - a.diff;
+          if (b.gf !== a.gf) return b.gf - a.gf;
+          return a.team.localeCompare(b.team);
+        })
+        .map((row) => ({ ...row }));
+    };
+
+    const formatDateTime = (date) =>
+      date.toLocaleString("es-ES", {
+        day: "2-digit",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+
+    const statusClass = (status) => {
+      if (status === "live") return "live";
+      if (status === "finished") return "finished";
+      return "scheduled";
+    };
+
+    const matchLine = (match) => {
+      const item = document.createElement("article");
+      item.className = `match-card ${statusClass(match.status)}`;
+      item.innerHTML = `
+        <p class="time">${formatDateTime(match.datetime)}</p>
+        <p class="fixture">
+          <span>${match.teamHome}</span>
+          <strong>${match.scoreHome != null ? `${match.scoreHome}` : "-"} : ${match.scoreAway != null ? `${match.scoreAway}` : "-"}</strong>
+          <span>${match.teamAway}</span>
+        </p>
+        <p class="badge">${match.status}</p>
+      `;
+      return item;
+    };
+
+    const renderMatches = (matches) => {
+      UI.liveList.replaceChildren();
+      UI.finishedList.replaceChildren();
+      UI.pendingList.replaceChildren();
+
+      const live = matches.filter((m) => m.status === "live");
+      const finished = matches
+        .filter((m) => m.status === "finished")
+        .sort((a, b) => b.datetime - a.datetime)
+        .slice(0, 12);
+      const pending = matches
+        .filter((m) => m.status !== "finished" && m.status !== "live")
+        .sort((a, b) => a.datetime - b.datetime);
+
+      if (live.length === 0) UI.liveList.appendChild(buildEmptyMatchMessage("No hay partidos en curso."));
+      else live.forEach((match) => UI.liveList.appendChild(matchLine(match)));
+
+      if (finished.length === 0)
+        UI.finishedList.appendChild(buildEmptyMatchMessage("Aún no hay partidos finalizados."));
+      else finished.forEach((match) => UI.finishedList.appendChild(matchLine(match)));
+
+      if (pending.length === 0)
+        UI.pendingList.appendChild(buildEmptyMatchMessage("No hay partidos pendientes."));
+      else pending.forEach((match) => UI.pendingList.appendChild(matchLine(match)));
+    };
+
+    const renderRanking = (standings) => {
+      UI.rankingBody.replaceChildren();
+
+      if (!standings.length) {
+        UI.rankingBody.appendChild(buildEmptyTableRow(10, "Aún no hay equipos para mostrar."));
+        return;
+      }
+
+      standings.forEach((team, index) => {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${index + 1}</td>
+          <td>${team.team}</td>
+          <td>${team.played}</td>
+          <td>${team.won}</td>
+          <td>${team.draw}</td>
+          <td>${team.lost}</td>
+          <td>${team.gf}</td>
+          <td>${team.gc}</td>
+          <td>${team.diff > 0 ? "+" : ""}${team.diff}</td>
+          <td>${team.points}</td>
+        `;
+        UI.rankingBody.appendChild(row);
+      });
+    };
+
+    const updateLastUpdate = () => {
+      const now = new Date();
+      UI.lastUpdate.textContent = `Última actualización: ${now.toLocaleTimeString("es-ES")}`;
+    };
+
+    const updateDataSourceStatus = (ok) => {
+      UI.statusIndicator.classList.toggle("status-live", ok);
+      UI.statusIndicator.classList.toggle("status-error", !ok);
+      UI.statusIndicator.textContent = ok ? "Sincronizado" : "Sin conexión al archivo local";
+    };
+
+    const render = async () => {
+      try {
+        const response = await fetch(`${UI.dataFile}?v=${Date.now()}`, { cache: "no-store" });
+        if (!response.ok) throw new Error("No se pudo leer el origen.");
+        const raw = await response.json();
+        const matches = parseMatches(raw.matches || []);
+        const standings = computeStandings(matches, raw.scoring || {});
+
+        renderRanking(standings);
+        renderMatches(matches);
+        updateDataSourceStatus(true);
+        UI.statusMsg.textContent = `${raw.tournamentName || "Maratón"} · Partidos totales: ${matches.length} · En curso: ${matches.filter((m) => m.status === "live").length}`;
+        updateLastUpdate();
+      } catch (error) {
+        console.error(error);
+        updateDataSourceStatus(false);
+        UI.statusMsg.textContent = "No se pudieron cargar los datos. Revisa que el archivo data/maratonsc-data.json exista.";
+      }
+    };
+
+    UI.refreshBtn.addEventListener("click", render);
+    render();
+    setInterval(render, UI.refreshIntervalMs);
+  </script>
+</body>
+</html>
